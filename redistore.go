@@ -5,9 +5,7 @@
 package redistore
 
 import (
-	"bytes"
 	"encoding/base32"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
@@ -16,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"encoding/json"
 )
 
 // Amount of time for cookies/redis keys to expire.
@@ -172,7 +171,7 @@ func (s *RediStore) Save(r *http.Request, w http.ResponseWriter, session *sessio
 	} else {
 		// Build an alphanumeric key for the redis store.
 		if session.ID == "" {
-			session.ID = strings.TrimRight(base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(32)), "=")
+			session.ID = "goo" + strings.TrimRight(base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(9)), "=")
 		}
 		if err := s.save(session); err != nil {
 			return err
@@ -193,7 +192,7 @@ func (s *RediStore) Save(r *http.Request, w http.ResponseWriter, session *sessio
 func (s *RediStore) Delete(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
 	conn := s.Pool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("DEL", "session_"+session.ID); err != nil {
+	if _, err := conn.Do("DEL", "sess:"+session.ID); err != nil {
 		return err
 	}
 	// Set cookie to expire.
@@ -220,13 +219,11 @@ func (s *RediStore) ping() (bool, error) {
 
 // save stores the session in redis.
 func (s *RediStore) save(session *sessions.Session) error {
-	buf := new(bytes.Buffer)
-	enc := gob.NewEncoder(buf)
-	err := enc.Encode(session.Values)
+	session.Values["cookie"] = *session.Options
+	b, err := json.Marshal(session.Values)
 	if err != nil {
 		return err
 	}
-	b := buf.Bytes()
 	if s.maxLength != 0 && len(b) > s.maxLength {
 		return errors.New("SessionStore: the value to store is too big")
 	}
@@ -239,7 +236,7 @@ func (s *RediStore) save(session *sessions.Session) error {
 	if age == 0 {
 		age = s.DefaultMaxAge
 	}
-	_, err = conn.Do("SETEX", "session_"+session.ID, age, b)
+	_, err = conn.Do("SETEX", "sess:"+session.ID, age, b)
 	return err
 }
 
@@ -251,7 +248,7 @@ func (s *RediStore) load(session *sessions.Session) (bool, error) {
 	if err := conn.Err(); err != nil {
 		return false, err
 	}
-	data, err := conn.Do("GET", "session_"+session.ID)
+	data, err := conn.Do("GET", "sess:"+session.ID)
 	if err != nil {
 		return false, err
 	}
@@ -262,15 +259,14 @@ func (s *RediStore) load(session *sessions.Session) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	dec := gob.NewDecoder(bytes.NewBuffer(b))
-	return true, dec.Decode(&session.Values)
+	return true, json.Unmarshal(b, &session.Values)
 }
 
 // delete removes keys from redis if MaxAge<0
 func (s *RediStore) delete(session *sessions.Session) error {
 	conn := s.Pool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("DEL", "session_"+session.ID); err != nil {
+	if _, err := conn.Do("DEL", "sess:"+session.ID); err != nil {
 		return err
 	}
 	return nil
