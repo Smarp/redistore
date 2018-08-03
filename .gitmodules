@@ -1,5 +1,5 @@
 [submodule "onsi/gomega"]
-	path = github.com/onsi/gomega
+	path = src/github.com/onsi/gomega
 	url = https://github.com/onsi/gomega
 [submodule "onsi/ginkgo"]
     path = src/github.com/onsi/ginkgo

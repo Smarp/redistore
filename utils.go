@@ -5,8 +5,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-
-	"github.com/gomodule/redigo/redis"
 )
 
 const MaxLength = 4096
@@ -27,7 +25,7 @@ var Setex = func(key, value string, age int) error {
 
 // loads value by key | GET command
 // returns empty string if there was an error
-var GET = func(key string) (string, error) {
+var Get = func(key string) (string, error) {
 	conn := store.Pool.Get()
 	defer conn.Close()
 	if err := conn.Err(); err != nil {
@@ -40,7 +38,7 @@ var GET = func(key string) (string, error) {
 	if data == nil {
 		return "", nil // no data was associated with this key
 	}
-	b, err := redis.Bytes(data, err)
+	b, err := Bytes(data, err)
 	if err != nil {
 		return "", err
 	}
@@ -58,7 +56,7 @@ var Del = func(key string) error {
 }
 
 // get keys from redis by pattern | KEYS command
-var Keys = func(pattern string) (arr []string, err error) {
+var Keys = func(pattern string) ([]string, error) {
 	conn := store.Pool.Get()
 	defer conn.Close()
 	if err := conn.Err(); err != nil {
@@ -69,6 +67,7 @@ var Keys = func(pattern string) (arr []string, err error) {
 	if !ok {
 		return nil, nil
 	}
+	arr := make([]string, 0)
 	for _, item := range redisResult {
 		switch reflect.TypeOf(item).Kind() {
 		case reflect.Slice:
